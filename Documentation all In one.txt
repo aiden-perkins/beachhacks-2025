@@ -1,0 +1,4125 @@
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+First Service
+Your First Service
+Get started with building a DAIN Service by understanding and running the auto-generated code sample.
+
+Now that you've got your working environment set up, let's dive into the auto-generated code a little bit starting with src/index.ts.
+
+Imports
+
+import { z } from "zod";
+import axios from "axios";
+
+import {
+  defineDAINService,
+  ToolConfig,
+} from "@dainprotocol/service-sdk";
+
+import { CardUIBuilder, TableUIBuilder, MapUIBuilder } from "@dainprotocol/utils";
+
+The DAIN Service SDK uses Zod for handling the data being passed into various config data structures and any library for handling API requests (in this case, axios).
+
+The ToolConfig type is used to define an individual tool that the service provides.
+The defineDAINService type is used to define the service metadata for the DAIN network.
+The default generated service is a working weather data service that requests data from the OpenMeteo Weather API.
+
+CardUIBuilder, TableUIBuilder, and MapUIBuilder are used to build the UI for the service.
+
+Tool Config
+A Tool is the most primitive major object in the Service SDK.
+
+
+const getWeatherConfig: ToolConfig = {
+  id: "get-weather",
+  name: "Get Weather",
+  description: "Fetches current weather for a city",
+  input: z
+    .object({
+      locationName: z.string().describe("Location name"),
+      latitude: z.number().describe("Latitude coordinate"),
+      longitude: z.number().describe("Longitude coordinate"),
+    })
+    .describe("Input parameters for the weather request"),
+  output: z
+    .object({
+      temperature: z.number().describe("Current temperature in Celsius"),
+      windSpeed: z.number().describe("Current wind speed in km/h"),
+    })
+    .describe("Current weather information"),
+  pricing: { pricePerUse: 0, currency: "USD" },
+  handler: async ({ locationName, latitude, longitude }, agentInfo, context) => {
+    console.log(
+      `User / Agent ${agentInfo.id} requested weather at ${locationName} (${latitude},${longitude})`
+    );
+
+
+    const response = await axios.get(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,wind_speed_10m`
+    );
+
+    const { temperature_2m, wind_speed_10m } = response.data.current;
+    const weatherEmoji = getWeatherEmoji(temperature_2m);
+
+    return {
+      text: `The current temperature in ${locationName} is ${temperature_2m}°C with wind speed of ${wind_speed_10m} km/h`,
+      data: {
+        temperature: temperature_2m,
+        windSpeed: wind_speed_10m,
+      },
+      ui: new CardUIBuilder()
+        .setRenderMode("page")
+        .title(`Current Weather in ${locationName} ${weatherEmoji}`)
+        .addChild(new MapUIBuilder()
+          .setInitialView(latitude, longitude, 10)
+          .setMapStyle('mapbox://styles/mapbox/streets-v12')
+          .addMarkers([
+            {
+              latitude,
+              longitude,
+              title: locationName,
+              description: `Temperature: ${temperature_2m}°C\nWind: ${wind_speed_10m} km/h`,
+              text: `${locationName} ${weatherEmoji}`,
+            }
+          ])
+          .build())
+        .content(`Temperature: ${temperature_2m}°C\nWind Speed: ${wind_speed_10m} km/h`)
+        .build(),
+    };
+  },
+};
+
+The following parameters are involved:
+
+The id parameter is used for identifying the tool.
+The name parameter is the name of the tool.
+The description parameter is a short description of what the tool does.
+The input parameter is used to define what kind of specific input would be extracted from the natural language input.
+The output parameter is used to define what kind of output would be produced by the tool.
+The pricing parameter is irrelevant for now, but it defines how much your service would earn per usage of this tool.
+The handler part includes the logic for the tool. See Tool Handler Returns for details on what the handler must return.
+DAIN Service
+Every Service will have one dainService object that looks like this:
+
+
+const dainService = defineDAINService({
+  metadata: {
+    title: "Weather DAIN Service",
+    description:
+      "A DAIN service for current weather and forecasts using Open-Meteo API",
+    version: "1.0.0",
+    author: "Your Name",
+    tags: ["weather", "forecast", "dain"],
+    logo: "https://cdn-icons-png.flaticon.com/512/252/252035.png"
+  },
+  identity: {
+    apiKey: process.env.DAIN_API_KEY,
+  },
+  tools: [getWeatherConfig, getWeatherForecastConfig],
+});
+The following parameters are involved:
+
+The metadata parameter contains the metadata involved in deploying the service to the network. This includes the title of the service, a description, the version that is deployed, the author of the service and tags used in routing to the service.
+The identity parameter contains the API key for the service that you got in the previous section.
+The tools parameter contains the Tool config objects of the tools to be deployed with the service.
+Starting the Service
+Now all that is left is to start the service.
+
+
+dainService.startNode().then(({ address }) => {
+  console.log("DAIN Service is running at :" + address().port);
+});
+This runs the Service on a port, which is 2022 here.
+
+Then, run this command in the terminal:
+
+
+npm run dev
+or with pnpm:
+
+
+pnpm run dev
+Running this command should generate a tunnel URL for the service that you would need for testing.
+
+Previous
+Project Setup
+Next
+Use / Test your Service
+Your First Service
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Test Out
+Testing out the service
+Now that you have a functional service, let's test it out in an interface
+
+Now that you're running a service and have a tunnel URL for it, let's see how you can test it out and ensure desired behavior.
+
+Test Site
+Head over to the Beachhacks Assistant webpage and login/create an account.
+
+Once you're in, click the 'settings' button in the bottom left corner of your screen, next to your profile icon.
+
+Settings
+Once you're in the settings page, you should see a button that says 'Enable Dev Mode'. Click that and enable it.
+
+Dev Mode
+Click into a new chat, you should find a button that says '+ Service'. Click that, and a modal will open. Paste the tunnel URL in the modal that opens and select the dev service you've built.
+
+Add Service
+Start a conversation with the service and you should be able to see the service in action!
+
+New ChatService Modal
+Previous
+Your First Service
+Next
+Tool Setup
+Testing out the service
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Tool
+Tool Setup
+Tool Setup
+Learn how to create and configure tools for your DAIN service
+
+Overview
+Tools are the core building blocks of DAIN services. Each tool represents a specific capability that AI agents can use to perform actions. When an agent connects to your service, it can access and utilize these tools based on their descriptions and defined input/output schemas.
+
+Creating a Tool
+A tool is defined using the ToolConfig type and consists of several key components:
+
+
+const exampleTool: ToolConfig = {
+  id: "unique-tool-id",
+  name: "Human Readable Name",
+  description: "Detailed description of what the tool does",
+  input: z.object({
+    // Input parameters schema
+  }),
+  output: z.object({
+    // Output data schema
+  }),
+  pricing: { pricePerUse: 0, currency: "USD" },
+  handler: async (inputs, agentInfo) => {
+    // Tool logic
+  }
+};
+Essential Components
+Identification
+
+
+id: "get-weather",        // Unique identifier for the tool
+name: "Get Weather",      // Display name
+Description The description is crucial as it guides the AI agent on when and how to use the tool. It should be clear and specific:
+
+
+description: "Fetches current weather conditions for a given location. Returns temperature,
+             wind speed, and precipitation probability. Use this when you need real-time
+             weather information for a specific city or coordinates."
+Input/Output Schema Use Zod to define exact input and output structures:
+
+
+input: z.object({
+  latitude: z.number().describe("Latitude coordinate"),
+  longitude: z.number().describe("Longitude coordinate"),
+  units: z.enum(["metric", "imperial"]).optional()
+}).describe("Weather request parameters"),
+
+output: z.object({
+  temperature: z.number(),
+  windSpeed: z.number(),
+  precipitation: z.number()
+}).describe("Current weather conditions")
+Pricing Define the cost per use:
+
+
+pricing: {
+  pricePerUse: 0.01,
+  currency: "USD"
+}
+Handler Implementation
+The tool's handler function processes requests and returns results. Learn more about implementing handler logic in the Handler Logic section.
+
+Response Structure
+Tools can return data along with UI components for visual presentation. See the Handler Returns section for details on structuring responses.
+
+Examples
+Web Search Tool
+
+const searchWebConfig: ToolConfig = {
+  id: "search-web",
+  name: "Search Web",
+  description: "Searches the web and returns the top 5 most relevant results with their titles, URLs, and descriptions. Use this when you need to find current information about any topic.",
+  input: z.object({
+    query: z.string().describe("Search query term or phrase")
+  }),
+  output: z.object({
+    results: z.array(z.object({
+      title: z.string(),
+      url: z.string(),
+      description: z.string()
+    }))
+  }),
+  handler: async ({ query }, agentInfo) => {
+    // Handler implementation
+  }
+};
+Stock Price Tool
+
+const getStockPriceConfig: ToolConfig = {
+  id: "get-stock-price",
+  name: "Get Stock Price",
+  description: "Fetches real-time stock price and daily statistics for any stock ticker symbol. Returns current price, daily high/low, volume, and price change percentage. Use this for getting up-to-date stock market information.",
+  input: z.object({
+    ticker: z.string().describe("Stock ticker symbol (e.g., AAPL)")
+  }),
+  output: z.object({
+    price: z.number(),
+    change: z.number(),
+    volume: z.number()
+  }),
+  handler: async ({ ticker }, agentInfo) => {
+    // Handler implementation
+  }
+};
+Weather Forecast Tool
+
+const getWeatherConfig: ToolConfig = {
+  id: "get-weather",
+  name: "Get Weather",
+  description: "Provides current weather conditions and 5-day forecast for any location. Input can be city name or coordinates. Returns temperature, humidity, wind speed, and precipitation probability.",
+  input: z.object({
+    location: z.string().describe("City name or coordinates"),
+    units: z.enum(["celsius", "fahrenheit"]).optional()
+  }),
+  output: z.object({
+    current: z.object({
+      temp: z.number(),
+      humidity: z.number()
+    }),
+    forecast: z.array(z.object({
+      date: z.string(),
+      temp: z.number()
+    }))
+  }),
+  handler: async ({ location, units }, agentInfo) => {
+    // Handler implementation
+  }
+};
+Note:
+
+Remember that tool descriptions are crucial for AI agents to understand when and how to use each tool. Write descriptions that are clear, specific, and include all necessary context about the tool's purpose and capabilities.
+
+Previous
+Use / Test your Service
+Next
+Handler Logic
+Tool Setup
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Tool
+Handler Logic
+Tool Handler Logic
+Understanding the flexibility and capabilities of DAIN tool handlers
+
+Tool Handler Overview
+The handler function in a DAIN tool is where you implement your core business logic. It receives the parsed input parameters and authenticated agent information, allowing you to perform any operations needed to fulfill the tool's purpose.
+
+
+import { DainResponse, CardUIBuilder } from "@dainprotocol/utils";
+
+handler: async (inputs: InputType, agentInfo: AgentInfo) => {
+  // Your custom logic here
+  return new DainResponse({
+    text: string,      // Message for the AI agent
+    data: OutputType,  // Structured data matching output schema
+    ui?: UIComponent   // Optional UI built with UIBuilders
+  });
+}
+Authentication and Identity
+Every tool handler receives an agentInfo parameter that provides authenticated identity information:
+
+
+interface AgentInfo {
+  id: string;  // Unique identifier linked to DAIN ID
+  // ... other agent properties
+}
+The id is uniquely tied to either:
+
+A human user's DAIN ID smart account (id.dain.org)
+An AI agent's unique identifier
+You can use this ID to:
+
+Authenticate users against your own systems
+Maintain user-specific state or preferences
+Track usage and implement rate limiting
+Link actions to specific DAIN identities
+Handler Capabilities
+Inside your handler, you can implement any logic your tool requires:
+
+
+import { DainResponse, CardUIBuilder, AlertUIBuilder } from "@dainprotocol/utils";
+
+handler: async ({ query }, agentInfo) => {
+  try {
+    // Database operations
+    const userPreferences = await db.getUserPreferences(agentInfo.id);
+
+    // External API calls
+    const apiResponse = await axios.get('https://api.example.com/data');
+
+    // Custom business logic
+    const processedData = await processData(apiResponse.data);
+
+    // Authentication with external services
+    const userToken = await getUserAuthToken(agentInfo.id);
+
+    // File operations
+    const fileContent = await fs.readFile('template.json');
+
+    // Machine learning models
+    const prediction = await mlModel.predict(query);
+
+    const cardUI = new CardUIBuilder()
+      .title("Results")
+      .content(`Processed data for user ${agentInfo.id}`)
+      .build();
+
+    return new DainResponse({
+      text: `Processed request for user ${agentInfo.id}`,
+      data: processedData,
+      ui: cardUI
+    });
+  } catch (error) {
+    console.error(`Error processing request for ${agentInfo.id}:`, error);
+
+    const errorUI = new AlertUIBuilder()
+      .variant("error")
+      .title("Error")
+      .message("Unable to complete request")
+      .build();
+
+    return new DainResponse({
+      text: `Error occurred: ${error.message}. Consider suggesting an alternative approach.`,
+      data: { error: error.message },
+      ui: errorUI
+    });
+  }
+}
+Error Handling
+
+import { DainResponse, AlertUIBuilder, CardUIBuilder } from "@dainprotocol/utils";
+
+handler: async (inputs, agentInfo) => {
+  try {
+    const results = await processData(inputs);
+    
+    const successUI = new CardUIBuilder()
+      .title("Success")
+      .content("Operation completed successfully")
+      .variant("default")
+      .build();
+
+    return new DainResponse({
+      text: "Successfully processed the request",
+      data: results,
+      ui: successUI
+    });
+
+  } catch (error) {
+    console.error(`Error processing request for ${agentInfo.id}:`, error);
+
+    const errorUI = new AlertUIBuilder()
+      .variant("error")
+      .title("Operation Failed")
+      .message(error.message)
+      .icon(true)
+      .build();
+
+    return new DainResponse({
+      text: `Error occurred: ${error.message}. Consider suggesting an alternative approach.`,
+      data: { error: error.message },
+      ui: errorUI
+    });
+  }
+}
+Example with Multiple UI Components
+
+import { 
+  DainResponse, 
+  CardUIBuilder, 
+  TableUIBuilder,
+  ChartUIBuilder 
+} from "@dainprotocol/utils";
+
+handler: async (inputs, agentInfo) => {
+  const data = await fetchAnalytics(agentInfo.id);
+
+  const chartUI = new ChartUIBuilder()
+    .type("line")
+    .title("Usage Trends")
+    .chartData(data.trends)
+    .dataKeys({ x: "date", y: "value" })
+    .build();
+
+  const tableUI = new TableUIBuilder()
+    .addColumns([
+      { key: "metric", header: "Metric" },
+      { key: "value", header: "Value" }
+    ])
+    .rows(data.metrics)
+    .build();
+
+  const cardUI = new CardUIBuilder()
+    .title("Analytics Dashboard")
+    .addChild(chartUI)
+    .addChild(tableUI)
+    .build();
+
+  return new DainResponse({
+    text: "Generated analytics dashboard",
+    data: data,
+    ui: cardUI
+  });
+}
+Type Safety
+
+interface AnalyticsData {
+  trends: Array<{
+    date: string;
+    value: number;
+  }>;
+  metrics: Array<{
+    metric: string;
+    value: number;
+  }>;
+}
+
+interface HandlerResponse {
+  text: string;
+  data: AnalyticsData;
+  ui?: UIComponent;
+}
+
+handler: async (inputs, agentInfo): Promise<HandlerResponse> => {
+  // Implementation
+}
+Previous
+Tool Setup
+Next
+Handler Returns
+Tool Handler Logic
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Tool
+Handler Returns
+Tool Handler Returns
+Learn how tools return data and UI components in the DAIN network
+
+Return Structure
+Each tool handler must return a DainResponse object with three properties:
+
+
+import { DainResponse, CardUIBuilder } from "@dainprotocol/utils";
+
+return new DainResponse({
+  text: string,     // Message for the AI agent
+  data: object,     // Structured data matching the output schema
+  ui: UIComponent  //  UI built with UIBuilders (or set to [] to skip sending UI)
+});
+Text Response
+The text property provides context and guidance for the AI agent and is not shown to users:
+
+
+return new DainResponse({
+  text: "Found 5 relevant results. The first result directly addresses the user's question about machine learning frameworks.",
+  data: results,
+  ui: cardUI
+});
+Data Response
+The data property must match your tool's defined output schema:
+
+
+interface SearchResults {
+  results: Array<{
+    title: string;
+    url: string;
+    description: string;
+  }>;
+}
+
+return new DainResponse({
+  text: "Found relevant results",
+  data: {
+    results: [
+      {
+        title: "Introduction to TensorFlow",
+        url: "https://example.com/tensorflow",
+        description: "Comprehensive guide to TensorFlow"
+      }
+    ]
+  },
+  ui: cardUI
+});
+UI Response
+Create UI components using UIBuilders from @dainprotocol/utils:
+
+Basic Component
+
+const cardUI = new CardUIBuilder()
+  .title("Search Results")
+  .content("Found 5 matches")
+  .build();
+
+return new DainResponse({
+  text: "Query complete",
+  data: results,
+  ui: cardUI
+});
+Nested Components
+
+const tableUI = new TableUIBuilder()
+  .addColumns([
+    { key: "title", header: "Title" },
+    { key: "description", header: "Description" }
+  ])
+  .rows(results)
+  .build();
+
+const cardUI = new CardUIBuilder()
+  .title("Search Results")
+  .addChild(tableUI)
+  .build();
+
+return new DainResponse({
+  text: "Results processed",
+  data: results,
+  ui: cardUI
+});
+Complex UI Example
+
+import { 
+  DainResponse, 
+  CardUIBuilder, 
+  AlertUIBuilder,
+  TableUIBuilder,
+  ChartUIBuilder 
+} from "@dainprotocol/utils";
+
+const alertUI = new AlertUIBuilder()
+  .variant("info")
+  .title("Analysis Complete")
+  .message("Found interesting patterns")
+  .build();
+
+const chartUI = new ChartUIBuilder()
+  .type("line")
+  .title("Trends")
+  .chartData(data.trends)
+  .dataKeys({ x: "date", y: "value" })
+  .build();
+
+const tableUI = new TableUIBuilder()
+  .addColumns([
+    { key: "metric", header: "Metric" },
+    { key: "value", header: "Value" }
+  ])
+  .rows(data.metrics)
+  .build();
+
+const cardUI = new CardUIBuilder()
+  .title("Analysis Results")
+  .addChild(alertUI)
+  .addChild(chartUI)
+  .addChild(tableUI)
+  .build();
+
+return new DainResponse({
+  text: "Analysis complete with visualizations",
+  data: data,
+  ui: cardUI
+});
+Previous
+Handler Logic
+Next
+File Support
+Tool Handler Returns
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Tool
+File Support
+File Support
+Learn how to handle file uploads in your DAIN service tools
+
+Overview
+The Butterfly interface can process uploaded files up to 1GB in size. When users upload files, they are provided to your tool as URLs that can be downloaded and processed.
+
+How It Works
+When a user uploads a file through the Butterfly interface:
+
+The file is securely stored and a URL is generated
+The AI agent receives this URL and can pass it to your tool
+Your tool can download and process the file contents
+Example: Image Analysis Tool
+
+import { DainResponse, ImageCardUIBuilder } from "@dainprotocol/utils";
+
+const analyzeImageConfig: ToolConfig = {
+  id: "analyze-image",
+  name: "Analyze Image",
+  description: "Analyzes an image from a URL and answers questions about its content",
+  input: z.object({
+    imageUrl: z.string().describe("URL of the image to analyze. Accepts URLS for png, jpeg, and webp"),
+    question: z.string().describe("Question to answer about the image content")
+  }),
+  output: z.object({
+    answer: z.string().describe("Answer to the question based on image content")
+  }),
+  handler: async ({ imageUrl, question }, agentInfo) => {
+    // Download the image
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer'
+    });
+    const buffer = Buffer.from(response.data);
+
+    // Process with Claude
+    const { text: answer } = await generateText({
+      model: anthropic('claude-3-5-sonnet-20241022'),
+      system: "You are an assistant that helps answer questions about images...",
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: question },
+            { type: 'image', image: buffer }
+          ]
+        }
+      ]
+    });
+
+    // Create UI with ImageCardBuilder
+    const imageUI = new ImageCardUIBuilder(imageUrl)
+      .title("Image Analysis Result")
+      .description(answer)
+      .imageAlt("Analyzed Image")
+      .onViewImage({
+        tool: "imageViewer",
+        params: {
+          url: imageUrl
+        }
+      })
+      .build();
+
+    return new DainResponse({
+      text: "Generated image analysis",
+      data: { answer },
+      ui: imageUI
+    });
+  }
+};
+Supported File Types
+Your tool can process any file type, as long as you handle the download and processing appropriately. Common use cases include:
+
+Images (PNG, JPEG, WebP)
+Documents (PDF, DOCX, TXT)
+Data files (CSV, JSON, XML)
+Audio files (MP3, WAV)
+Video files (MP4, WebM)
+Previous
+Handler Returns
+Next
+Confirmations
+File Support
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Tool
+Confirmations
+Tool Confirmations
+Add human verification steps to your tools
+
+Overview
+Tool confirmations allow you to add a human verification step before executing sensitive operations. When enabled, the assistant will present a confirmation UI to the user before proceeding with the tool's main handler.
+
+Configuration
+Enable confirmations in your tool config:
+
+
+import { ToolConfig } from '@dainprotocol/service-sdk';
+import { CardUIBuilder } from '@dainprotocol/utils';
+
+const toolConfig: ToolConfig = {
+  // ... other config
+  suggestConfirmation: true,
+  async suggestConfirmationUI(input) {
+    return {
+      success: true,
+      ui: new CardUIBuilder()
+        .title('Confirm Action')
+        .content(`Are you sure you want to proceed?`)
+        .build()
+    };
+  }
+};
+Example: Issue Creation Confirmation
+
+const createIssueConfig: ToolConfig = {
+  id: 'create-issue',
+  name: 'Create Issue',
+  suggestConfirmation: true,
+  async suggestConfirmationUI(input) {
+    return {
+      success: true,
+      ui: new CardUIBuilder()
+        .title('Confirm Issue Creation')
+        .content(`
+          ## Issue Details
+
+          **Title:** ${input.title}
+          **Description:** ${input.description}
+          **Assignee:** ${input.assigneeId}
+          **Due Date:** ${input.dueDate}
+        `)
+        .build()
+    };
+  },
+  handler: async (input, agentInfo) => {
+    // Handler only runs after user confirms
+    const issue = await createIssue(input);
+    // ...
+  }
+};
+Confirmations
+Flow
+Assistant calls tool with parameters
+suggestConfirmationUI generates confirmation UI
+User sees confirmation dialog with details
+If user confirms, handler executes
+If user denies, operation is cancelled
+Use Cases
+Creating, updating, or deleting resources
+Making purchases or payments
+Sending messages or emails
+Modifying user settings
+Executing irreversible operations
+Actions requiring human oversight
+Error Handling
+
+async suggestConfirmationUI(input) {
+  try {
+    // Validate input or check conditions
+    if (!isValid(input)) {
+      return {
+        success: false,
+        ui: new CardUIBuilder()
+          .title('Invalid Parameters')
+          .content('Please check the input values')
+          .build()
+      };
+    }
+
+    return {
+      success: true,
+      ui: new CardUIBuilder()
+        .title('Confirm Action') 
+        .content('Action details...')
+        .build()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      ui: new CardUIBuilder()
+        .title('Error')
+        .content(error.message)
+        .build()
+    };
+  }
+}
+Previous
+File Support
+Next
+Contexts
+Tool Confirmations
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Memory
+Contexts
+Service Contexts
+Provide service-specific memory and context to AI assistants
+
+Overview
+Service Contexts allow services to provide additional memory and contextual information to AI assistants. This helps the assistant make better decisions by understanding user history, preferences, and state specific to your service.
+
+Understanding Service Contexts
+While AI assistants maintain their own memory, Service Contexts allow your service to:
+
+Inject service-specific history
+Provide user preferences
+Share interaction patterns
+Include relevant state information
+Add specialized knowledge
+Contexts are refreshed between every tool call and interaction with the assistant.
+
+Creating a Context
+A service context is defined using the ServiceContext type:
+
+
+interface ServiceContext {
+  id: string;              // Unique identifier
+  name: string;           // Display name
+  description: string;    // Description of the context
+  getContextData: (agentInfo: AgentInfo) => Promise<string>;  // Context generator
+}
+Usage
+Add contexts to your service configuration:
+
+
+const dainService = defineDAINService({
+  // ... other config
+  contexts: [orderHistoryContext, userPreferencesContext]
+});
+Example Implementations
+Shopping History Context
+
+const orderHistoryContext: ServiceContext = {
+  id: "orderHistory",
+  name: "Shopping History",
+  description: "User's previous orders and preferences",
+  getContextData: async (agentInfo) => {
+    const orders = await db.orders.findRecent(agentInfo.id);
+    const preferences = await db.preferences.get(agentInfo.id);
+    
+    return `
+User has placed ${orders.length} orders in the last 30 days.
+Frequently ordered items: ${orders.getTopItems().join(", ")}
+Dietary preferences: ${preferences.dietary.join(", ")}
+Preferred delivery times: ${preferences.deliveryTimes}
+Last order: ${orders[0]?.summary || "No recent orders"}
+    `.trim();
+  }
+};
+User Preferences Context
+
+const userPreferencesContext: ServiceContext = {
+  id: "userPreferences",
+  name: "User Preferences",
+  description: "User's service preferences and settings",
+  getContextData: async (agentInfo) => {
+    const prefs = await getUserPreferences(agentInfo.id);
+    
+    return `
+User preferred units: ${prefs.units}
+Language preference: ${prefs.language}
+Notification settings: ${prefs.notifications}
+Account type: ${prefs.accountType}
+Feature access: ${Object.keys(prefs.enabledFeatures).join(", ")}
+    `.trim();
+  }
+};
+Common Use Cases
+Service Contexts are valuable for providing:
+
+Historical Information
+
+const searchHistoryContext: ServiceContext = {
+  id: "searchHistory",
+  name: "Search History",
+  description: "Recent search patterns",
+  getContextData: async (agentInfo) => {
+    const searches = await getRecentSearches(agentInfo.id);
+    return `Recent searches: ${searches.map(s => s.query).join(", ")}`;
+  }
+};
+User Behavior Patterns
+
+const userBehaviorContext: ServiceContext = {
+  id: "userBehavior",
+  name: "Usage Patterns",
+  description: "User interaction patterns",
+  getContextData: async (agentInfo) => {
+    const patterns = await analyzeBehavior(agentInfo.id);
+    return `User typically active: ${patterns.activeHours}
+Preferred categories: ${patterns.topCategories}`;
+  }
+};
+State Information
+
+const cartContext: ServiceContext = {
+  id: "cartState",
+  name: "Shopping Cart State",
+  description: "Current cart contents and history",
+  getContextData: async (agentInfo) => {
+    const cart = await getCart(agentInfo.id);
+    return `Cart has ${cart.items.length} items worth $${cart.total}
+Abandoned items: ${cart.recentlyRemoved.join(", ")}`;
+  }
+};
+Service Status
+
+const serviceStatusContext: ServiceContext = {
+  id: "serviceStatus",
+  name: "Service Status",
+  description: "Current service availability",
+  getContextData: async (agentInfo) => {
+    const status = await getServiceStatus();
+    return `Service load: ${status.load}
+Available features: ${status.availableFeatures}
+Maintenance mode: ${status.maintenance}`;
+  }
+};
+Previous
+Confirmations
+Next
+UI
+Service Contexts
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Structure
+UI Structure
+Understanding UI components and composition in DAIN tool handlers
+
+Overview
+Tool handlers can return UI components that are displayed to users in the Butterfly interface. UI components are built using UIBuilders from @dainprotocol/utils.
+
+Basic Structure
+
+import { DainResponse, CardUIBuilder } from "@dainprotocol/utils";
+
+return new DainResponse({
+  text: "Weather information",
+  data: weatherData,
+  ui: new CardUIBuilder()
+    .title("Weather Report")
+    .content("Current temperature is 72°F")
+    .build()
+});
+Component Composition
+UIBuilders support component nesting through addChild and addChildren methods:
+
+
+import { 
+  DainResponse, 
+  CardUIBuilder, 
+  AlertUIBuilder,
+  TableUIBuilder 
+} from "@dainprotocol/utils";
+
+const alertUI = new AlertUIBuilder()
+  .variant("info")
+  .title("Search Complete")
+  .message("Found 3 matching results")
+  .build();
+
+const tableUI = new TableUIBuilder()
+  .addColumns([
+    { key: "name", header: "Name" },
+    { key: "value", header: "Value" }
+  ])
+  .rows(results)
+  .build();
+
+const cardUI = new CardUIBuilder()
+  .title("Search Results")
+  .addChild(alertUI)
+  .addChild(tableUI)
+  .build();
+
+return new DainResponse({
+  text: "Search complete",
+  data: results,
+  ui: cardUI
+});
+Complex Layouts
+Example of a multi-level dashboard layout:
+
+
+import { 
+  DainResponse, 
+  CardUIBuilder,
+  ChartUIBuilder,
+  StatsGridUIBuilder,
+  TableUIBuilder
+} from "@dainprotocol/utils";
+
+// Create chart component
+const chartUI = new ChartUIBuilder()
+  .type("line")
+  .title("Daily Trends")
+  .chartData(trendData)
+  .dataKeys({ x: "date", y: "value" })
+  .build();
+
+// Create stats grid
+const statsUI = new StatsGridUIBuilder()
+  .addStats([
+    { title: "Total Users", value: 1234 },
+    { title: "Revenue", value: 45600, prefix: "$" }
+  ])
+  .build();
+
+// Create data table
+const tableUI = new TableUIBuilder()
+  .addColumns([
+    { key: "id", header: "ID" },
+    { key: "name", header: "Name" }
+  ])
+  .rows(userData)
+  .build();
+
+// Compose final layout
+const dashboardUI = new CardUIBuilder()
+  .title("Dashboard")
+  .addChild(statsUI)
+  .addChild(chartUI)
+  .addChild(tableUI)
+  .build();
+
+return new DainResponse({
+  text: "Dashboard data loaded",
+  data: dashboardData,
+  ui: dashboardUI
+});
+Previous
+UI
+Next
+Push Pages
+UI Structure
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Pages
+Push Pages
+Create fullscreen UI experiences separate from the chat flow
+
+Overview
+Push Pages allow tools to create dedicated UI views that appear in a side panel, separate from the chat interface. This provides more screen space for complex visualizations and interactions compared to inline chat rendering.
+
+Render Modes
+UIBuilders support two render modes:
+
+inline (default): Components appear within the chat flow
+page: Components appear in a dedicated side panel
+Usage
+Set the render mode when building components:
+
+
+import { TableUIBuilder } from '@dainprotocol/utils';
+
+const tableUI = new TableUIBuilder()
+  .setRenderMode('page')  // Push to side panel
+  .addColumns([...])
+  .rows([...])
+  .build();
+Example: Stock Details Page
+
+import { 
+  TableUIBuilder,
+  CardUIBuilder,
+  ChartUIBuilder 
+} from '@dainprotocol/utils';
+
+// Create full-page stock details
+const tableUI = new TableUIBuilder()
+  .setRenderMode('page')  // Render in side panel
+  .addColumns([
+    { key: 'field', header: 'Field' },
+    { key: 'value', header: 'Value' }
+  ])
+  .rows([
+    { field: 'Name', value: details.name },
+    { field: 'Market Cap', value: details.marketCap },
+    { field: 'Exchange', value: details.exchange }
+  ]);
+
+// Create price chart
+const chartUI = new ChartUIBuilder()
+  .setRenderMode('page')  // Render in side panel
+  .type('line')
+  .title('Price History')
+  .chartData(priceData)
+  .dataKeys({
+    x: 'date',
+    y: 'price'
+  });
+
+// Combine in card
+const cardUI = new CardUIBuilder()
+  .setRenderMode('page')  // Render in side panel
+  .title('Stock Analysis')
+  .addChild(chartUI.build())
+  .addChild(tableUI.build());
+Use Cases
+Push Pages are ideal for:
+
+Detailed data views
+Complex dashboards
+Multi-chart analysis
+Large data tables
+Form workflows
+Documentation views
+Examples from Stock Service
+News Table (Page Mode)
+
+const tableBuilder = new TableUIBuilder()
+  .setRenderMode('page')  // Opens in side panel
+  .addColumns([
+    { key: 'publisher', header: 'Source' },
+    { key: 'title', header: 'Title' },
+    { key: 'url', header: 'Link' }
+  ])
+  .rows(articles);
+Stock Chart (Page Mode)
+
+const chartBuilder = new ChartUIBuilder()
+  .setRenderMode('page')  // Opens in side panel
+  .type('line')
+  .title(`${ticker} Price History`)
+  .chartData(priceData)
+  .dataKeys({
+    x: 'date',
+    y: 'price'
+  });
+Stock Details (Inline Mode)
+
+const cardUI = new CardUIBuilder()
+  // No setRenderMode = default inline
+  .title(`${ticker} Overview`)
+  .content(`Current Price: $${price}`)
+  .build();
+Previous
+UI Structure
+Next
+Components
+Push Pages
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+DataGrid
+DataGrid Component
+Display and interact with tabular data in a powerful grid interface
+
+DataGrid Component
+Overview
+The DataGrid component provides a powerful way to display and interact with tabular data. It supports features like sorting, filtering, and row selection, with customizable columns and row actions.
+
+Usage
+To use the DataGrid component in your tool handler, follow these steps:
+
+Import the DataGridUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { DataGridUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a DataGridUIBuilder instance and configure it:
+
+const dataGridUI = new DataGridUIBuilder()
+  .addColumns([          // Mandatory
+    {
+      field: "name",
+      header: "Name",
+      sortable: true
+    },
+    {
+      field: "email",
+      header: "Email",
+      filter: true
+    }
+  ])
+  .rows([               // Mandatory
+    { name: "John Doe", email: "john@example.com" },
+    { name: "Jane Smith", email: "jane@example.com" }
+  ])
+  .build();
+Return the DataGridUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated data grid",
+  data: { /* Your data */ },
+  ui: dataGridUI
+});
+Configuration
+Mandatory Props
+columns (GridColumn[]): Array of column definitions
+rows (T[]): Array of data objects to display in the grid
+Optional Props
+Each column can have these optional properties:
+
+header (string): Column header text
+flex (number): Column width flex value
+sortable (boolean): Enable sorting for the column
+filter (boolean | string): Enable filtering for the column
+editable (boolean): Allow editing of cell values
+GridColumn Interface
+The GridColumn interface defines the structure of each column:
+
+
+interface GridColumn {
+    field: string;       // Mandatory: data field to display
+    header?: string;     // Optional: column header text
+    flex?: number;       // Optional: column width flex
+    sortable?: boolean;  // Optional: enable sorting
+    filter?: boolean | string; // Optional: enable filtering
+    editable?: boolean;  // Optional: enable cell editing
+}
+Actions
+The DataGrid supports row click actions:
+
+
+dataGridUI.onRowClick({
+  tool: "yourToolName",
+  paramSchema: {
+    // Define required parameters
+    id: { type: "string" }
+  },
+  params: {
+    // Predefined parameters
+    action: "view"
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when a row is clicked
+paramSchema (object): Schema defining required parameters when the action is triggered
+params (object): Pre-defined parameters included with every row click
+Examples
+Basic DataGrid
+
+const basicGrid = new DataGridUIBuilder()
+  .addColumns([
+    { field: "id", header: "ID" },
+    { field: "name", header: "Name" },
+    { field: "status", header: "Status" }
+  ])
+  .rows([
+    { id: 1, name: "Project A", status: "Active" },
+    { id: 2, name: "Project B", status: "Pending" }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Projects Grid",
+  data: {},
+  ui: basicGrid
+});
+Interactive DataGrid
+
+const interactiveGrid = new DataGridUIBuilder()
+  .addColumns([
+    { field: "id", header: "ID", sortable: true },
+    { field: "name", header: "Name", filter: true },
+    { field: "status", header: "Status", editable: true }
+  ])
+  .rows([
+    { id: 1, name: "Task A", status: "In Progress" },
+    { id: 2, name: "Task B", status: "Completed" }
+  ])
+  .onRowClick({
+    tool: "taskManager",
+    paramSchema: {
+      taskId: { type: "string" }
+    },
+    params: {
+      action: "view"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Tasks Grid",
+  data: {},
+  ui: interactiveGrid
+});
+Flexible Column Layout
+
+const flexGrid = new DataGridUIBuilder()
+  .addColumns([
+    { field: "name", header: "Name", flex: 2 },
+    { field: "email", header: "Email", flex: 3 },
+    { field: "role", header: "Role", flex: 1 }
+  ])
+  .rows([
+    { name: "John Doe", email: "john@example.com", role: "Admin" },
+    { name: "Jane Smith", email: "jane@example.com", role: "User" }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Users Grid",
+  data: {},
+  ui: flexGrid
+});
+Previous
+Components
+Next
+Layout
+DataGrid Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Layout
+Layout Component
+Create flexible layouts with rows, columns, and grids
+
+Layout Component
+Overview
+The Layout component provides a flexible way to arrange UI elements in rows, columns, or grids. It supports various alignment options, spacing controls, and responsive behaviors.
+
+Usage
+To use the Layout component in your tool handler, follow these steps:
+
+Import the LayoutUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { LayoutUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a LayoutUIBuilder instance and configure it:
+
+const layoutUI = new LayoutUIBuilder()
+  .setLayoutType("row")              // Optional: row | column | grid
+  .setGap(16)                        // Optional: spacing between items
+  .setJustifyContent("between")      // Optional: alignment on main axis
+  .setAlignItems("center")           // Optional: alignment on cross axis
+  .build();
+Return the LayoutUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated layout",
+  data: { /* Your data */ },
+  ui: layoutUI
+});
+Configuration
+Optional Props
+layoutType (row | column | grid): Layout arrangement type
+columns (number): Number of columns for grid layout
+gap (number): Space between items in pixels
+justifyContent (start | center | end | between | around | evenly): Main axis alignment
+alignItems (start | center | end | baseline | stretch): Cross axis alignment
+flexWrap (nowrap | wrap | wrap-reverse): How items wrap in flex layouts
+margin (string): Outer spacing (e.g., "16px" or "1rem")
+padding (string): Inner spacing
+backgroundColor (string): Background color value
+Examples
+Row Layout
+
+const rowLayout = new LayoutUIBuilder()
+  .setLayoutType("row")
+  .setGap(16)
+  .setJustifyContent("between")
+  .setAlignItems("center")
+  .setPadding("24px")
+  .build();
+
+return new DainResponse({
+  text: "Row Layout",
+  data: {},
+  ui: rowLayout
+});
+Grid Layout
+
+const gridLayout = new LayoutUIBuilder()
+  .setLayoutType("grid")
+  .setColumns(3)
+  .setGap(24)
+  .setMargin("32px")
+  .setBackgroundColor("#f5f5f5")
+  .build();
+
+return new DainResponse({
+  text: "Grid Layout",
+  data: {},
+  ui: gridLayout
+});
+Column Layout with Wrapping
+
+const columnLayout = new LayoutUIBuilder()
+  .setLayoutType("column")
+  .setGap(8)
+  .setAlignItems("start")
+  .setFlexWrap("wrap")
+  .setPadding("16px 24px")
+  .build();
+
+return new DainResponse({
+  text: "Column Layout",
+  data: {},
+  ui: columnLayout
+});
+Complex Layout
+
+const complexLayout = new LayoutUIBuilder()
+  .setLayoutType("grid")
+  .setColumns(2)
+  .setGap(16)
+  .setJustifyContent("center")
+  .setAlignItems("stretch")
+  .setMargin("24px")
+  .setPadding("16px")
+  .setBackgroundColor("#ffffff")
+  .build();
+
+return new DainResponse({
+  text: "Complex Layout",
+  data: {},
+  ui: complexLayout
+});
+Previous
+DataGrid
+Next
+Forms
+Layout Component
+
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Form
+Form Component
+Create dynamic forms with various field types and validation
+
+Form Component
+Overview
+The Form component allows you to create dynamic forms with various field types, validation, and submission handling. It supports multiple input widgets and layouts for collecting user data.
+
+Usage
+To use the Form component in your tool handler, follow these steps:
+
+Import the FormUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { FormUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a FormUIBuilder instance and configure it:
+
+const formUI = new FormUIBuilder()
+  .title("Contact Form")              // Optional
+  .description("Send us a message")   // Optional
+  .addFields([                        // Mandatory
+    {
+      name: "name",
+      label: "Full Name",
+      type: "string",
+      widget: "text",
+      required: true
+    },
+    {
+      name: "email",
+      label: "Email Address",
+      type: "string",
+      widget: "email",
+      required: true
+    }
+  ])
+  .onSubmit({                        // Mandatory
+    tool: "contactHandler",
+    params: {
+      source: "contact_form"
+    }
+  })
+  .build();
+Return the FormUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Contact form generated",
+  data: { /* Your data */ },
+  ui: formUI
+});
+Configuration
+Mandatory Props
+fields (FormField[]): Array of form field definitions
+onSubmit: Action configuration for form submission
+Optional Props
+title (string): Form title
+description (string): Form description
+layout (string): Layout style identifier
+Field Types and Widgets
+Available field types:
+
+string
+number
+boolean
+Available widgets:
+
+
+type FormFieldWidget =
+    // Text inputs
+    | "text" | "password" | "email" | "url" | "tel" | "search"
+    // Date and time
+    | "date" | "time" | "week" | "month" | "datetime-local"
+    // Special inputs
+    | "color" | "range" | "file" | "image"
+    // Multi-line and selections
+    | "textarea" | "select" | "radio" | "checkbox"
+    // Other
+    | "hidden" | "button" | "reset" | "submit"
+FormField Interface
+Each form field is defined using this interface:
+
+
+interface FormField {
+    name: string;        // Mandatory: field identifier
+    type: FormFieldType; // Mandatory: data type
+    label?: string;      // Optional: field label
+    widget?: FormFieldWidget; // Optional: input widget type
+    placeholder?: string;     // Optional: placeholder text
+    required?: boolean;       // Optional: field requirement
+    options?: Array<{        // Optional: for select/radio
+        label: string;
+        value: string | number;
+    }>;
+    defaultValue?: string | number | boolean; // Optional: default value
+}
+Actions
+The Form component requires an onSubmit action that defines what happens when the form is submitted:
+
+
+formUI.onSubmit({
+  tool: "yourToolName",
+  params: {
+    // Predefined parameters
+    source: "registration"
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when the form is submitted. This is mandatory.
+
+params (object): Pre-defined parameters that will be included with the form submission:
+
+These values are set at build time and cannot be changed by the user
+Useful for including constant values or context that should always be included
+Optional, but recommended for tracking form sources or types
+paramSchema: This is automatically generated from your form fields, so you don't need to specify it. The builder will:
+
+Create a schema entry for each form field
+Include validation rules based on field properties
+Handle type conversion based on field types
+For example, this form:
+
+
+const form = new FormUIBuilder()
+  .addFields([
+    {
+      name: "email",
+      type: "string",
+      required: true
+    }
+  ])
+  .onSubmit({
+    tool: "emailSubscribe",
+    params: {
+      list: "newsletter"
+    }
+  })
+  .build();
+Will automatically generate this paramSchema:
+
+
+{
+  email: { 
+    type: "string",
+    required: true
+  }
+}
+Examples
+Basic Contact Form
+
+const contactForm = new FormUIBuilder()
+  .title("Contact Us")
+  .addFields([
+    {
+      name: "name",
+      label: "Name",
+      type: "string",
+      widget: "text",
+      required: true
+    },
+    {
+      name: "message",
+      label: "Message",
+      type: "string",
+      widget: "textarea",
+      required: true
+    }
+  ])
+  .onSubmit({
+    tool: "messageHandler",
+    params: {
+      department: "support"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Contact Form",
+  data: {},
+  ui: contactForm
+});
+Registration Form with Multiple Widgets
+
+const registrationForm = new FormUIBuilder()
+  .title("Create Account")
+  .description("Sign up for a new account")
+  .addFields([
+    {
+      name: "email",
+      label: "Email",
+      type: "string",
+      widget: "email",
+      required: true
+    },
+    {
+      name: "password",
+      label: "Password",
+      type: "string",
+      widget: "password",
+      required: true
+    },
+    {
+      name: "role",
+      label: "Account Type",
+      type: "string",
+      widget: "select",
+      options: [
+        { label: "Developer", value: "dev" },
+        { label: "Designer", value: "design" }
+      ],
+      required: true
+    },
+    {
+      name: "newsletter",
+      label: "Subscribe to newsletter",
+      type: "boolean",
+      widget: "checkbox",
+      defaultValue: true
+    }
+  ])
+  .onSubmit({
+    tool: "userRegistration",
+    params: {
+      source: "web"
+    }
+  })
+  .build();
+Booking Form with Date/Time
+
+const bookingForm = new FormUIBuilder()
+  .title("Schedule Appointment")
+  .addFields([
+    {
+      name: "date",
+      label: "Preferred Date",
+      type: "string",
+      widget: "date",
+      required: true
+    },
+    {
+      name: "time",
+      label: "Preferred Time",
+      type: "string",
+      widget: "time",
+      required: true
+    },
+    {
+      name: "notes",
+      label: "Special Requirements",
+      type: "string",
+      widget: "textarea"
+    }
+  ])
+  .onSubmit({
+    tool: "bookingHandler",
+    params: {
+      type: "appointment"
+    },
+    paramSchema: {
+      date: {
+        type: "string",
+        required: true
+      }
+    }
+  })
+  .build();
+Previous
+Layout
+Next
+Table
+Form Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Table Component
+Table Component
+Display structured data in rows and columns with support for multiple data types
+
+Table Component
+Overview
+The Table component displays structured data in a responsive grid format with support for different data types including text, numbers, images, currency, and clickable links. It features a styled header and hoverable rows.
+
+Usage
+To use the Table component in your tool handler, follow these steps:
+
+Import the TableUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { TableUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a TableUIBuilder instance and configure it:
+
+const tableUI = new TableUIBuilder()
+  .addColumns([                    // Mandatory
+    { key: "name", header: "Name", type: "text" },
+    { key: "price", header: "Price", type: "currency" }
+  ])
+  .rows([                         // Mandatory
+    { name: "Product One", price: 99.99 },
+    { name: "Product Two", price: 149.99 }
+  ])
+  .build();
+Return the TableUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated data table",
+  data: { /* Your data */ },
+  ui: tableUI
+});
+Configuration
+Mandatory Props
+columns (TableColumn[]): Array of column definitions
+rows (Array<Record<string, unknown>>): Array of data objects
+TableColumn Interface
+Each column is defined using this interface:
+
+
+interface TableColumn {
+    key: string;        // Mandatory: unique identifier for the column
+    header: string;     // Mandatory: display name in header
+    type: string;       // Mandatory: data type for the column
+}
+Supported Column Types
+text: Default type, displays plain text
+image: Renders an image
+number: Formats numbers with locale-specific separators
+currency: Formats as currency with symbol
+link: Creates a clickable link
+Examples
+Basic Text Table
+
+const basicTable = new TableUIBuilder()
+  .addColumns([
+    { key: "name", header: "Name", type: "text" },
+    { key: "age", header: "Age", type: "number" }
+  ])
+  .rows([
+    { name: "John Doe", age: 30 },
+    { name: "Jane Smith", age: 25 }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Basic Table",
+  data: {},
+  ui: basicTable
+});
+Mixed Content Table
+
+const mixedTable = new TableUIBuilder()
+  .addColumns([
+    { key: "product", header: "Product", type: "text" },
+    { key: "preview", header: "Preview", type: "image" },
+    { key: "price", header: "Price", type: "currency" }
+  ])
+  .rows([
+    {
+      product: "Premium Widget",
+      preview: "https://example.com/widget.jpg",
+      price: 149.99
+    },
+    {
+      product: "Basic Widget",
+      preview: "https://example.com/basic.jpg",
+      price: 99.99
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Product Table",
+  data: {},
+  ui: mixedTable
+});
+Dynamic Column Generation
+
+const dynamicTable = new TableUIBuilder()
+  .addColumns(
+    productFields.map(field => ({
+      key: field.id,
+      header: field.label,
+      type: field.dataType
+    }))
+  )
+  .rows(productData)
+  .build();
+
+return new DainResponse({
+  text: "Dynamic Table",
+  data: {},
+  ui: dynamicTable
+});
+Previous
+Forms
+Next
+Timeline
+Table Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Timeline
+Timeline Component
+Display chronological events with timestamps, titles, and descriptions
+
+Timeline Component
+Overview
+The Timeline component displays a vertical list of chronological events, each with a timestamp, optional title, and description. It's perfect for showing history, activity logs, or step-by-step processes.
+
+Usage
+To use the Timeline component in your tool handler, follow these steps:
+
+Import the TimeLineUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { TimeLineUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a TimeLineUIBuilder instance and configure it:
+
+const timelineUI = new TimeLineUIBuilder()
+  .title("Project History")          // Optional
+  .description("Key milestones")     // Optional
+  .addItems([                        // Mandatory
+    {
+      timestamp: "2024-03-01",
+      title: "Project Started",
+      description: "Initial planning phase began"
+    },
+    {
+      timestamp: "2024-03-15",
+      title: "Phase 1 Complete",
+      description: "Core features implemented"
+    }
+  ])
+  .build();
+Return the TimeLineUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated timeline",
+  data: { /* Your data */ },
+  ui: timelineUI
+});
+Configuration
+Mandatory Props
+items (TimeLineItem[]): Array of timeline items
+Optional Props
+title (string): Timeline title
+description (string): Timeline description
+TimeLineItem Interface
+Each timeline item is defined using this interface:
+
+
+interface TimeLineItem {
+    timestamp: string;     // Mandatory: date/time of the event
+    title?: string;       // Optional: event title
+    description?: string; // Optional: event description
+}
+Actions
+The Timeline supports item click actions:
+
+
+timelineUI.onItemClick({
+  tool: "eventViewer",
+  params: {
+    // Predefined parameters
+    view: "detail"
+  },
+  paramSchema: {
+    view: { type: "string" }
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when an item is clicked
+params (object): Pre-defined parameters that will be included with the action:
+These values are set at build time
+Will be passed to the tool when an item is clicked
+paramSchema (object): Schema defining required parameters
+Examples
+Basic Timeline
+
+const basicTimeline = new TimeLineUIBuilder()
+  .addItems([
+    {
+      timestamp: "2024-01-01",
+      title: "New Year Launch",
+      description: "Product officially launched"
+    },
+    {
+      timestamp: "2024-02-15",
+      title: "First Update",
+      description: "Major features added"
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Basic Timeline",
+  data: {},
+  ui: basicTimeline
+});
+Interactive Timeline
+
+const interactiveTimeline = new TimeLineUIBuilder()
+  .title("User Activity")
+  .description("Recent account activities")
+  .addItems([
+    {
+      timestamp: "2024-03-10T14:30:00",
+      title: "Login",
+      description: "User logged in from new device"
+    },
+    {
+      timestamp: "2024-03-10T15:45:00",
+      title: "Settings Changed",
+      description: "Profile settings updated"
+    }
+  ])
+  .onItemClick({
+    tool: "activityViewer",
+    params: {
+      type: "user_activity"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Activity Timeline",
+  data: {},
+  ui: interactiveTimeline
+});
+Project Milestones
+
+const milestoneTimeline = new TimeLineUIBuilder()
+  .title("Project Roadmap")
+  .description("Development milestones and deadlines")
+  .addItems([
+    {
+      timestamp: "2024-Q1",
+      title: "Planning Phase",
+      description: "Requirements gathering and architecture design"
+    },
+    {
+      timestamp: "2024-Q2",
+      title: "Development",
+      description: "Core features implementation"
+    },
+    {
+      timestamp: "2024-Q3",
+      title: "Testing",
+      description: "QA and user acceptance testing"
+    }
+  ])
+  .onItemClick({
+    tool: "projectViewer",
+    params: {
+      view: "milestone"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Project Timeline",
+  data: {},
+  ui: milestoneTimeline
+});
+Previous
+Table
+Next
+Card
+Timeline Component
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Card
+Card Component
+Display content in a contained card layout with optional title, fields, and custom actions
+
+Card Component
+Overview
+The Card component provides a simple, clean container for content with an optional title. It supports different styling variants, buttons, and other fields. You can also trigger tool calls via custom button actions.
+
+Table of Contents
+Usage
+Configuration
+Fields
+Actions
+Retro Compatibility: onConfirm
+New Methods: addButton, addButtons
+Examples
+Basic Card
+Card with Title, Variant, and Aligned Actions
+Card with Fields
+Card with Multiple Buttons
+Retro-Compatible Card with onConfirm
+Usage
+To use the Card component in your tool handler:
+
+First, import the required components:
+
+import { CardUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create and configure your card:
+
+const cardUI = new CardUIBuilder()
+  .title("Important Information")    // Optional
+  .content("This is the main content of the card") // Optional but recommended
+  .build();
+
+return new DainResponse({
+  text: "Generated card content",
+  data: { /* Your data */ },
+  ui: cardUI
+});
+Configuration
+Card Props
+Name	Type	Description	Required?	Default
+title	string	The heading or title to display at the top of the card.	No	""
+content	string	The main content text of the card.	Yes	""
+variant	"default" | "destructive" | "outline"	Styling variant for the card.	No	"default"
+buttonText	string	(Retro-compat) Deprecated in favor of .addButton().	No	""
+buttonUrl	string	(Retro-compat) Deprecated in favor of .addButton() with link.	No	""
+fields	CardField[]	Additional fields (label-value pairs) to display in the card.	No	[]
+actionAlignment	"row" | "column"	How to align actions/buttons in the card.	No	"row"
+CardField Interface
+
+export interface CardField {
+  label: string;        // Label text (e.g. "User ID")
+  value: string;        // Value text (e.g. "12345")
+  type?: "link" | "button"; // Optional: can display as a link or button
+  link?: string;        // If 'type' is "link", provide a URL
+}
+Fields
+Note: Fields can be added using several methods, giving you flexibility in how you structure your card's content.
+
+You can add fields using these methods:
+
+.addField(field: CardField): Add a single field
+.addFields(fields: CardField[]): Add multiple fields at once
+.addFields(items: T[], mapper: (item: T) => CardField): Add multiple fields using a mapping function
+Example:
+
+
+const cardUI = new CardUIBuilder()
+  .title("Order Details")
+  .content("Here are the details of your recent purchase.")
+  .addField({ label: "Order ID", value: "12345" })
+  .addField({ label: "Status", value: "Shipped" })
+  .build();
+Actions
+Retro Compatibility: onConfirm
+Warning: While still supported, onConfirm is considered legacy. Consider using the new button methods for more flexibility.
+
+
+cardUI.onConfirm({
+  tool: "yourToolName",
+  paramSchema: {
+    param1: { type: "string" }
+  },
+  params: {
+    preset: "value"
+  }
+});
+New Methods: addButton, addButtons
+For more flexible actions, we provide several button-related methods:
+
+addButton
+
+export interface ButtonParams {
+  label: string; // The text displayed on the button
+  tool: string;  // The name of the tool to call
+  paramSchema: paramSchema;  // Tool parameters
+  params: Record<string, unknown>; // Predefined values
+  variant?: ButtonVariant; // "primary" | "secondary" | "destructive" | "cancel" | "outline"
+}
+Example:
+
+
+const cardUI = new CardUIBuilder()
+  .title("Manage Account")
+  .content("Choose an action to perform on your account")
+  .addButton({
+    label: "Delete Account",
+    tool: "accountManager",
+    paramSchema: {
+      userId: { type: "string" },
+      reason: { type: "string" }
+    },
+    params: {
+      action: "delete",
+      timestamp: Date.now()
+    },
+    variant: "destructive"
+  })
+  .build();
+addButtons
+You can add multiple buttons either as an array or using a mapper function:
+
+Array Method:
+
+const cardUI = new CardUIBuilder()
+  .title("Account Actions")
+  .content("Choose one of the following options")
+  .addButtons([
+    {
+      label: "Suspend",
+      tool: "accountManager",
+      paramSchema: { userId: { type: "string" } },
+      params: { action: "suspend" },
+      variant: "secondary"
+    },
+    {
+      label: "Delete",
+      tool: "accountManager",
+      paramSchema: { userId: { type: "string" } },
+      params: { action: "delete" },
+      variant: "destructive"
+    }
+  ])
+  .build();
+Mapper Method:
+
+const actions = [
+  { actionName: "suspend", label: "Suspend", variant: "secondary" },
+  { actionName: "delete", label: "Delete", variant: "destructive" }
+];
+
+const cardUI = new CardUIBuilder()
+  .title("Dynamic Actions")
+  .content("These actions are generated from data")
+  .addButtons(actions, (item) => ({
+    label: item.label,
+    tool: "accountManager",
+    paramSchema: { userId: { type: "string" } },
+    params: { action: item.actionName },
+    variant: item.variant
+  }))
+  .build();
+Aligning Actions
+Use alignActions to control button layout:
+
+
+const cardUI = new CardUIBuilder()
+  .title("Actions Layout")
+  .content("These buttons will be aligned horizontally")
+  .alignActions("row")
+  .addButton({
+    label: "Action 1",
+    tool: "sampleTool",
+    paramSchema: {},
+    params: {}
+  })
+  .addButton({
+    label: "Action 2",
+    tool: "sampleTool",
+    paramSchema: {},
+    params: {}
+  })
+  .build();
+Examples
+Note: Here are complete examples showcasing different card configurations.
+
+Basic Card
+
+const basicCard = new CardUIBuilder()
+  .content("This is a simple card with just content.")
+  .build();
+
+return new DainResponse({
+  text: "Basic Card",
+  data: {},
+  ui: basicCard
+});
+Card with Title, Variant, and Aligned Actions
+
+const warningCard = new CardUIBuilder()
+  .title("Subscription Warning")
+  .content("Your subscription will expire soon.")
+  .variant("destructive")
+  .alignActions("row")
+  .addButton({
+    label: "Renew Now",
+    tool: "subscriptionTool",
+    paramSchema: { userId: { type: "string" } },
+    params: { action: "renew" },
+    variant: "primary"
+  })
+  .build();
+
+return new DainResponse({
+  text: "Warning Card",
+  data: {},
+  ui: warningCard
+});
+Card with Fields
+
+const detailsCard = new CardUIBuilder()
+  .title("Order Details")
+  .content("Below are the details for your order.")
+  .addFields([
+    { label: "Order ID", value: "12345" },
+    { label: "Status", value: "Shipped" }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Order Details Card",
+  data: {},
+  ui: detailsCard
+});
+Card with Multiple Buttons
+
+const multiButtonCard = new CardUIBuilder()
+  .title("Manage Profile")
+  .content("Pick an action to perform on your profile.")
+  .addButtons([
+    {
+      label: "Update Info",
+      tool: "profileTool",
+      paramSchema: { userId: { type: "string" } },
+      params: { action: "update" },
+      variant: "secondary"
+    },
+    {
+      label: "Delete Profile",
+      tool: "profileTool",
+      paramSchema: { userId: { type: "string" } },
+      params: { action: "delete" },
+      variant: "destructive"
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Multi-Button Card",
+  data: {},
+  ui: multiButtonCard
+});
+Retro-Compatible Card with onConfirm
+
+const retroCard = new CardUIBuilder()
+  .title("Delete Account")
+  .content("Are you sure you want to delete your account?")
+  .onConfirm({
+    tool: "accountManager",
+    paramSchema: {
+      userId: { type: "string" },
+      reason: { type: "string" }
+    },
+    params: {
+      action: "delete",
+      timestamp: Date.now()
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Retro-Confirm Card",
+  data: {},
+  ui: retroCard
+});
+Previous
+Timeline
+Next
+Alert
+Card Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Alert
+Alert Component
+Display status messages and notifications with different severity levels
+
+Alert Component
+Overview
+The Alert component displays important messages or notifications with different severity levels, each with its own distinct color scheme and icon. It is useful for displaying success messages, errors, warnings, or general information.
+
+Usage
+To use the Alert component in your tool handler, please follow these steps:
+
+Import the AlertUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { AlertUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create an AlertUIBuilder instance, set its properties (such as variant, title, message), then call .build():
+
+const alertUI = new AlertUIBuilder()
+  .variant("success")   // Mandatory: info | warning | error | success
+  .title("Operation successful")  // Mandatory
+  .message("Your changes have been saved") // Mandatory
+  .icon(true)            // Optional (default is true)
+  .build();
+Return the AlertUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated alert message",
+  data: { /* Your data */ },
+  ui: alertUI
+});
+Configuration
+Mandatory Props
+variant (info, warning, error, or success): Defines the severity or style of the Alert.
+title (string): The heading or title to display in the Alert.
+message (string): The main content of the Alert.
+Optional Props
+icon (boolean): Whether to show an icon (true by default).
+type (string): An additional field if you want more granular control. Typically, variant is sufficient.
+Examples
+Success Alert
+
+const successAlert = new AlertUIBuilder()
+  .variant("success")
+  .title("Payment Processed")
+  .message("Your payment of $99.99 has been successfully processed")
+  .build();
+
+return new DainResponse({
+  text: "Payment",
+  data: {},
+  ui: successAlert
+});
+Error Alert
+
+const errorAlert = new AlertUIBuilder()
+  .variant("error")
+  .title("Connection Failed")
+  .message("Unable to connect to the server. Please check your internet connection and try again.")
+  .build();
+
+return new DainResponse({
+  text: "Connection Issue",
+  data: {},
+  ui: errorAlert
+});
+Warning Alert
+
+const warningAlert = new AlertUIBuilder()
+  .variant("warning")
+  .title("Storage Space Low")
+  .message("You have used 90% of your storage space. Consider upgrading your plan or removing unused files.")
+  .build();
+
+return new DainResponse({
+  text: "Storage Warning",
+  data: {},
+  ui: warningAlert
+});
+Info Alert without Icon
+
+const infoAlert = new AlertUIBuilder()
+  .variant("info")
+  .title("Scheduled Maintenance")
+  .message("System maintenance is scheduled for tomorrow at 2 AM UTC. Service interruptions may occur.")
+  .icon(false) // hide icon
+  .build();
+
+return new DainResponse({
+  text: "Maintenance Notice",
+  data: {},
+  ui: infoAlert
+});
+Previous
+Card
+Next
+Card List
+Alert Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+CardList
+Card List Component
+Display a grid of cards with titles, descriptions, and icons
+
+Card List Component
+Overview
+The Card List component displays a responsive grid of cards, each with a title, description, and optional icon. It's ideal for showing features, benefits, steps, or any collection of related items that need visual separation.
+
+Usage
+To use the Card List component in your tool handler, follow these steps:
+
+Import the CardListUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { CardListUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a CardListUIBuilder instance and configure it:
+
+const cardListUI = new CardListUIBuilder()
+  .title("Key Features")  // Optional
+  .description("Explore what our platform offers")  // Optional
+  .addCards([  // Mandatory
+    {
+      title: "Easy Integration",
+      description: "Connect with your existing tools in minutes"
+    },
+    {
+      title: "Advanced Analytics",
+      description: "Get detailed insights into your data"
+    }
+  ])
+  .build();
+Return the CardListUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated card list",
+  data: { /* Your data */ },
+  ui: cardListUI
+});
+Configuration
+Mandatory Props
+cards (CardItem[]): Array of card items, where each card must have:
+title (string): The card's title
+description (string): The card's description
+Optional Props
+title (string): Header title for the entire card list
+description (string): Header description for the card list
+icon (string): Icon identifier for individual cards
+CardItem Interface
+The CardItem interface defines the structure of each card in the list:
+
+
+interface CardItem {
+    title: string;
+    description: string;
+    icon?: string;
+}
+Actions
+The Card List component supports an onConfirm action that can be triggered for card interactions:
+
+
+cardListUI.onConfirm({
+  tool: "yourToolName",
+  params: {
+    // Predefined parameters
+    action: "value"
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when a card action is triggered.
+
+params (object): Pre-defined parameters that will be included with the tool call:
+
+These values are set at build time
+Will be combined with the card's data when triggered
+Examples
+Basic Card List
+
+const basicList = new CardListUIBuilder()
+  .addCards([
+    {
+      title: "Automated Backups",
+      description: "Your data is automatically backed up every hour"
+    },
+    {
+      title: "24/7 Support",
+      description: "Get help whenever you need it from our support team"
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Basic Card List",
+  data: {},
+  ui: basicList
+});
+Card List with Header and Action
+
+const actionList = new CardListUIBuilder()
+  .title("Getting Started")
+  .description("Follow these steps to set up your account")
+  .addCards([
+    {
+      title: "Create Account",
+      description: "Sign up using your email address"
+    },
+    {
+      title: "Configure Settings",
+      description: "Customize your workspace preferences"
+    }
+  ])
+  .onConfirm({
+    tool: "onboarding",
+    params: {
+      flow: "setup"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Action Card List",
+  data: {},
+  ui: actionList
+});
+Feature List with Icons
+
+const featureList = new CardListUIBuilder()
+  .title("Platform Benefits")
+  .description("Why customers choose our solution")
+  .addCards([
+    {
+      title: "Security First",
+      description: "Enterprise-grade security with end-to-end encryption",
+      icon: "shield"
+    },
+    {
+      title: "Scalable",
+      description: "Grows with your business needs",
+      icon: "scale"
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Feature List",
+  data: {},
+  ui: featureList
+});
+Previous
+Alert
+Next
+Image Gallery
+Card List Component
+
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+ImageGallery
+Image Gallery Component
+Display a responsive grid of images with optional titles and descriptions
+
+Image Gallery Component
+Overview
+The Image Gallery component creates a responsive grid of images with customizable columns, hover effects, and optional image titles. Images are displayed in a square aspect ratio with smooth scaling animations on hover.
+
+Usage
+To use the Image Gallery component in your tool handler, follow these steps:
+
+Import the ImageGalleryUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { ImageGalleryUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create an ImageGalleryUIBuilder instance and configure it:
+
+const galleryUI = new ImageGalleryUIBuilder()
+  .title("Product Collection")         // Optional
+  .description("Latest releases")      // Optional
+  .columns(3)                         // Optional (2, 3, or 4)
+  .addImages([                        // Mandatory
+    {
+      url: "https://example.com/image1.jpg",
+      alt: "Product 1",
+      title: "Premium Widget"
+    },
+    {
+      url: "https://example.com/image2.jpg",
+      alt: "Product 2"
+    }
+  ])
+  .build();
+Return the ImageGalleryUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated image gallery",
+  data: { /* Your data */ },
+  ui: galleryUI
+});
+Configuration
+Mandatory Props
+images (GalleryItem[]): Array of image items to display
+Optional Props
+title (string): Gallery title
+description (string): Gallery description
+columns (2 | 3 | 4): Number of columns in the grid (default: 3)
+GalleryItem Interface
+Each gallery item is defined using this interface:
+
+
+interface GalleryItem {
+    url: string;        // Mandatory: image URL
+    alt?: string;       // Optional: image alt text
+    title?: string;     // Optional: image title overlay
+}
+Actions
+The Image Gallery supports an image click action:
+
+
+galleryUI.onViewImage({
+  tool: "imageViewer",
+  params: {
+    // Predefined parameters
+    source: "gallery"
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when an image is clicked
+params (object): Pre-defined parameters that will be included with the action:
+These values are set at build time
+Will be passed to the tool when an image is clicked
+paramSchema (object): Optional schema defining required parameters
+Examples
+Basic Gallery
+
+const basicGallery = new ImageGalleryUIBuilder()
+  .addImages([
+    {
+      url: "https://example.com/photo1.jpg",
+      alt: "Nature scene"
+    },
+    {
+      url: "https://example.com/photo2.jpg",
+      alt: "Urban landscape"
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Basic Gallery",
+  data: {},
+  ui: basicGallery
+});
+Gallery with Titles and Action
+
+const interactiveGallery = new ImageGalleryUIBuilder()
+  .title("Travel Photography")
+  .description("Highlights from recent adventures")
+  .columns(4)
+  .addImages([
+    {
+      url: "https://example.com/paris.jpg",
+      alt: "Eiffel Tower",
+      title: "Paris, France"
+    },
+    {
+      url: "https://example.com/tokyo.jpg",
+      alt: "Tokyo streets",
+      title: "Tokyo, Japan"
+    }
+  ])
+  .onViewImage({
+    tool: "photoViewer",
+    params: {
+      collection: "travel2023"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Travel Gallery",
+  data: {},
+  ui: interactiveGallery
+});
+Product Showcase Gallery
+
+const productGallery = new ImageGalleryUIBuilder()
+  .title("Spring Collection")
+  .description("Latest fashion arrivals")
+  .columns(2)
+  .addImages([
+    {
+      url: "https://example.com/product1.jpg",
+      alt: "Blue dress",
+      title: "Summer Breeze Dress - $89"
+    },
+    {
+      url: "https://example.com/product2.jpg",
+      alt: "Leather bag",
+      title: "Classic Leather Tote - $129"
+    }
+  ])
+  .onViewImage({
+    tool: "productViewer",
+    params: {
+      category: "spring2024"
+    },
+    paramSchema: {
+      category: { type: "string" }
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Product Gallery",
+  data: {},
+  ui: productGallery
+});
+Previous
+Card List
+Next
+Image Card
+Image Gallery Component
+
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+ImageCard
+Image Card Component
+Display images with optional title, description, and action buttons
+
+Image Card Component
+Overview
+The Image Card component displays images with configurable aspect ratios, optional overlay text, and action buttons. It supports hover effects and multiple layout options for presenting visual content.
+
+Usage
+To use the Image Card component in your tool handler, follow these steps:
+
+Import the ImageCardUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { ImageCardUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create an ImageCardUIBuilder instance and configure it:
+
+const imageCardUI = new ImageCardUIBuilder({ imageUrl: "https://example.com/image.jpg"}) // Mandatory: image URL
+  .title("Mountain Landscape")        // Optional
+  .description("Beautiful vista")     // Optional
+  .imageAlt("Mountain sunset")        // Optional
+  .aspectRatio("video")              // Optional: square | video | wide | portrait
+  .withOverlay(true)                 // Optional
+  .build();
+Return the ImageCardUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated image card",
+  data: { /* Your data */ },
+  ui: imageCardUI
+});
+Configuration
+Mandatory Props
+imageUrl (string): URL of the image to display
+Optional Props
+title (string): Card title
+description (string): Card description
+imageAlt (string): Alt text for the image
+aspectRatio (square | video | wide | portrait): Image aspect ratio
+overlay (boolean): Whether to show text overlay on image
+className (string): Custom CSS class name
+Aspect Ratios
+square: 1:1
+video: 16:9
+wide: 21:9
+portrait: 3:4
+Actions
+The Image Card supports two types of actions:
+
+
+imageCardUI.onLearnMore({
+  tool: "yourToolName",
+  params: {
+    // Predefined parameters
+    id: "image123"
+  }
+});
+
+imageCardUI.onViewGallery({
+  tool: "galleryViewer",
+  params: {
+    // Predefined parameters
+    galleryId: "nature"
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when the action is triggered
+params (object): Pre-defined parameters that will be included with the action:
+These values are set at build time
+Will be passed to the tool when the action is triggered
+paramSchema (object): Optional schema defining required parameters
+Examples
+Basic Image Card
+
+const basicCard = new ImageCardUIBuilder("https://example.com/photo.jpg")
+  .title("Nature Photo")
+  .description("Captured in the wild")
+  .imageAlt("Wildlife photograph")
+  .build();
+
+return new DainResponse({
+  text: "Basic Image Card",
+  data: {},
+  ui: basicCard
+});
+Image Card with Overlay and Action
+
+const overlayCard = new ImageCardUIBuilder("https://example.com/landscape.jpg")
+  .title("Scenic Vista")
+  .description("Breathtaking mountain views")
+  .aspectRatio("wide")
+  .withOverlay(true)
+  .onLearnMore({
+    tool: "contentViewer",
+    params: {
+      type: "landscape",
+      id: "vista123"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Interactive Image Card",
+  data: {},
+  ui: overlayCard
+});
+Gallery Image Card
+
+const galleryCard = new ImageCardUIBuilder("https://example.com/gallery-preview.jpg")
+  .title("Photo Collection")
+  .description("View all photos in this collection")
+  .aspectRatio("square")
+  .onViewGallery({
+    tool: "galleryViewer",
+    params: {
+      galleryId: "nature2023",
+      source: "featured"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Gallery Preview Card",
+  data: {},
+  ui: galleryCard
+});
+Previous
+Image Gallery
+Next
+Progress List
+Image Card Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+ProgressList
+Progress List Component
+Display multiple progress bars with labels, values, and descriptions
+
+Progress List Component
+Overview
+The Progress List component displays a series of progress bars with labels, current values, and optional maximum values and descriptions. Each progress bar can be customized with different colors and includes animated transitions.
+
+Usage
+To use the Progress List component in your tool handler, follow these steps:
+
+Import the ProgressListUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { ProgressListUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a ProgressListUIBuilder instance and configure it:
+
+const progressListUI = new ProgressListUIBuilder()
+  .title("Project Progress")          // Optional
+  .addItems([                         // Mandatory
+    {
+      label: "Tasks Completed",
+      value: 7,
+      max: 10,
+      color: "bg-blue-600",
+      description: "7 out of 10 tasks finished"
+    }
+  ])
+  .build();
+Return the ProgressListUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated progress indicators",
+  data: { /* Your data */ },
+  ui: progressListUI
+});
+Configuration
+Mandatory Props
+items (ProgressItem[]): Array of progress items
+Optional Props
+title (string): Header title for the progress list
+ProgressItem Interface
+Each progress item is defined using this interface:
+
+
+interface ProgressItem {
+    label: string;           // Mandatory: item label
+    value: number;          // Mandatory: current value
+    max?: number;           // Optional: maximum value (defaults to 100)
+    color?: string;         // Optional: Tailwind color class
+    description?: string;   // Optional: description text
+}
+Actions
+The Progress List supports item selection actions:
+
+
+progressListUI.onSelectItem({
+  tool: "itemViewer",
+  params: {
+    // Predefined parameters
+    view: "details"
+  },
+  paramSchema: {
+    view: { type: "string" }
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when an item is selected
+params (object): Pre-defined parameters that will be included with the action:
+These values are set at build time
+Will be passed to the tool when an item is selected
+paramSchema (object): Schema defining required parameters
+Examples
+Basic Progress List
+
+const basicProgress = new ProgressListUIBuilder()
+  .addItems([
+    {
+      label: "Upload Progress",
+      value: 65
+    },
+    {
+      label: "Download Progress",
+      value: 30
+    }
+  ])
+  .build();
+
+return new DainResponse({
+  text: "Basic Progress",
+  data: {},
+  ui: basicProgress
+});
+Progress with Custom Max Values
+
+const taskProgress = new ProgressListUIBuilder()
+  .title("Task Completion")
+  .addItems([
+    {
+      label: "Phase 1",
+      value: 8,
+      max: 10,
+      color: "bg-green-600",
+      description: "Initial planning phase"
+    },
+    {
+      label: "Phase 2",
+      value: 3,
+      max: 12,
+      color: "bg-yellow-600",
+      description: "Development in progress"
+    }
+  ])
+  .onSelectItem({
+    tool: "taskViewer",
+    params: {
+      type: "phase"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Task Progress",
+  data: {},
+  ui: taskProgress
+});
+System Status Progress
+
+const systemStatus = new ProgressListUIBuilder()
+  .title("System Status")
+  .addItems([
+    {
+      label: "CPU Usage",
+      value: 45,
+      color: "bg-blue-600",
+      description: "Current processor utilization"
+    },
+    {
+      label: "Storage",
+      value: 750,
+      max: 1000,
+      color: "bg-purple-600",
+      description: "GB used out of 1TB total"
+    }
+  ])
+  .onSelectItem({
+    tool: "systemMonitor",
+    params: {
+      detail: "full"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "System Status",
+  data: {},
+  ui: systemStatus
+});
+Previous
+Image Card
+Next
+Chart
+Progress List Component
+
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Chart
+Chart Component
+Display data visualizations with bar, line, and pie charts
+
+Chart Component
+Overview
+The Chart component creates data visualizations using three chart types: bar charts, line charts, and pie charts. Each chart type includes customizable axes, tooltips, and optional trend indicators and footers.
+
+Usage
+To use the Chart component in your tool handler, follow these steps:
+
+Import the ChartUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { ChartUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a ChartUIBuilder instance and configure it:
+
+const chartUI = new ChartUIBuilder()
+  .type("bar")           // Mandatory: 'bar' | 'line' | 'pie'
+  .title("Monthly Sales") // Mandatory
+  .chartData([           // Mandatory
+    { month: "Jan", sales: 4000 },
+    { month: "Feb", sales: 3000 }
+  ])
+  .dataKeys({            // Mandatory
+    x: "month",
+    y: "sales"
+  })
+  .description("Sales performance over time") // Optional
+  .build();
+Return the ChartUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated chart visualization",
+  data: { /* Your data */ },
+  ui: chartUI
+});
+Configuration
+Mandatory Props
+type ('bar' | 'line' | 'pie'): The type of chart to display
+title (string): The chart's title
+data (T[]): Array of data points for the chart
+dataKeys (object): Mapping of data keys to chart axes
+x (string): Key for X-axis data
+y (string): Key for Y-axis data
+name? (string): Optional key for pie chart segment names
+Optional Props
+description (string): Additional context about the chart
+trend (object): Trend indicator information
+value (number): Trend value
+text (string): Trend description
+footer (string): Footer text below the chart
+DataKeys Interface
+The dataKeys interface defines how data is mapped to the chart:
+
+
+interface dataKeys {
+    x: string;    // Key for X-axis values
+    y: string;    // Key for Y-axis values
+    name?: string; // Optional: Key for pie chart segment names
+}
+Examples
+Bar Chart
+
+const barChart = new ChartUIBuilder()
+  .type("bar")
+  .title("Revenue by Quarter")
+  .description("Quarterly revenue performance")
+  .chartData([
+    { quarter: "Q1", revenue: 50000 },
+    { quarter: "Q2", revenue: 65000 },
+    { quarter: "Q3", revenue: 45000 }
+  ])
+  .dataKeys({
+    x: "quarter",
+    y: "revenue"
+  })
+  .trend(15, "15% increase from last year")
+  .build();
+
+return new DainResponse({
+  text: "Revenue Chart",
+  data: {},
+  ui: barChart
+});
+Line Chart
+
+const lineChart = new ChartUIBuilder()
+  .type("line")
+  .title("Daily Temperature")
+  .chartData([
+    { time: "09:00", temp: 72 },
+    { time: "12:00", temp: 76 },
+    { time: "15:00", temp: 73 }
+  ])
+  .dataKeys({
+    x: "time",
+    y: "temp"
+  })
+  .footer("Temperature measured in Fahrenheit")
+  .build();
+
+return new DainResponse({
+  text: "Temperature Chart",
+  data: {},
+  ui: lineChart
+});
+Pie Chart
+
+const pieChart = new ChartUIBuilder()
+  .type("pie")
+  .title("Market Share")
+  .description("Product category distribution")
+  .chartData([
+    { category: "Electronics", value: 45 },
+    { category: "Clothing", value: 30 },
+    { category: "Food", value: 25 }
+  ])
+  .dataKeys({
+    y: "value",
+    name: "category"
+  })
+  .build();
+
+return new DainResponse({
+  text: "Market Share Chart",
+  data: {},
+  ui: pieChart
+});
+Previous
+Progress List
+Next
+Map
+Chart Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Components
+Map
+Map Component
+Display interactive maps with custom markers and popups
+
+Map Component
+Overview
+The Map component creates an interactive map interface using Mapbox, supporting custom markers, popups, and view controls. It's perfect for displaying location-based data, routes, or geographic information.
+
+Usage
+To use the Map component in your tool handler, follow these steps:
+
+Import the MapUIBuilder and DainResponse from the @dainprotocol/utils package:
+
+import { MapUIBuilder, DainResponse } from "@dainprotocol/utils";
+Create a MapUIBuilder instance and configure it:
+
+const mapUI = new MapUIBuilder()
+  .setInitialView(40.7128, -74.0060, 11)  // Mandatory: lat, lng, zoom
+  .addMarker({                            // Optional
+    latitude: 40.7128,
+    longitude: -74.0060,
+    text: "🗽",
+    title: "New York City",
+    description: "The Big Apple"
+  })
+  .setMapStyle("mapbox://styles/mapbox/streets-v12")  // Optional
+  .setZoomRange(9, 18)                    // Optional: min, max zoom
+  .build();
+Return the MapUIBuilder instance in a DainResponse object:
+
+return new DainResponse({
+  text: "Generated map view",
+  data: { /* Your data */ },
+  ui: mapUI
+});
+Configuration
+Mandatory Props
+initialView: Object containing:
+latitude (number): Initial center latitude
+longitude (number): Initial center longitude
+zoom (number): Initial zoom level
+Optional Props
+markers (MapMarker[]): Array of map markers
+mapStyle (string): Mapbox style URL
+maxZoom (number): Maximum zoom level
+minZoom (number): Minimum zoom level
+MapMarker Interface
+Each marker is defined using this interface:
+
+
+interface MapMarker {
+    latitude: number;       // Mandatory: marker latitude
+    longitude: number;      // Mandatory: marker longitude
+    text: string;          // Mandatory: emoji or text for marker
+    title?: string;        // Optional: popup title
+    description?: string;  // Optional: popup description
+}
+Actions
+The Map component supports marker click actions:
+
+
+mapUI.onMarkerClick({
+  tool: "locationViewer",
+  params: {
+    // Predefined parameters
+    source: "map"
+  },
+  paramSchema: {
+    source: { type: "string" }
+  }
+});
+Action Arguments
+tool (string): The name of the tool to be called when a marker is clicked
+params (object): Pre-defined parameters that will be included with the action:
+These values are set at build time
+Will be passed to the tool when a marker is clicked
+Examples
+Basic Location Map
+
+const basicMap = new MapUIBuilder()
+  .setInitialView(51.5074, -0.1278, 13)
+  .addMarker({
+    latitude: 51.5074,
+    longitude: -0.1278,
+    text: "📍",
+    title: "London",
+    description: "Capital of England"
+  })
+  .build();
+
+return new DainResponse({
+  text: "London Map",
+  data: {},
+  ui: basicMap
+});
+Multiple Points of Interest
+
+const poiMap = new MapUIBuilder()
+  .setInitialView(48.8566, 2.3522, 12)
+  .setMapStyle("mapbox://styles/mapbox/light-v11")
+  .setZoomRange(10, 16)
+  .addMarkers([
+    {
+      latitude: 48.8584,
+      longitude: 2.2945,
+      text: "🗼",
+      title: "Eiffel Tower"
+    },
+    {
+      latitude: 48.8606,
+      longitude: 2.3376,
+      text: "🏛️",
+      title: "Louvre Museum"
+    }
+  ])
+  .onMarkerClick({
+    tool: "poiViewer",
+    params: {
+      city: "paris"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Paris Attractions",
+  data: {},
+  ui: poiMap
+});
+Interactive Store Locations
+
+const storeMap = new MapUIBuilder()
+  .setInitialView(34.0522, -118.2437, 10)
+  .setMapStyle("mapbox://styles/mapbox/streets-v12")
+  .setZoomRange(8, 18)
+  .addMarkers(storeLocations.map(store => ({
+    latitude: store.lat,
+    longitude: store.lng,
+    text: "🏪",
+    title: store.name,
+    description: `Open: ${store.hours}`
+  })))
+  .onMarkerClick({
+    tool: "storeDetails",
+    params: {
+      view: "full"
+    }
+  })
+  .build();
+
+return new DainResponse({
+  text: "Store Locations",
+  data: {},
+  ui: storeMap
+});
+Previous
+Chart
+Next
+Pinnable Widgets
+Map Component
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Ui
+Pinnables
+Pinnable Widgets
+Create persistent UI widgets for your DAIN service
+
+Overview
+Pinnable widgets are persistent UI elements that remain visible and accessible whenever a user is connected to your service. They provide quick access to frequently used features without requiring AI assistance.
+
+Configuration
+A pinnable widget is defined using the ServicePinnable type:
+
+
+interface ServicePinnable {
+  id: string;              // Unique identifier
+  name: string;           // Display name
+  description: string;    // Description of functionality
+  type: "widget";        // Type of pinnable
+  label: string;         // Widget label
+  icon: string;          // Icon identifier
+  getWidget: (agentInfo: AgentInfo) => Promise<DainResponse>;  // UI generator
+}
+Add widgets to your service configuration:
+
+
+const dainService = defineDAINService({
+  // ... other config
+  pinnables: [marketOverviewWidget]  // Array of pinnable widgets
+});
+Example: Market Overview Widget
+
+import { 
+  CardUIBuilder, 
+  TableUIBuilder, 
+  ChartUIBuilder,
+  FormUIBuilder,
+  AlertUIBuilder 
+} from '@dainprotocol/utils';
+
+const getMarketOverviewWidget: ServicePinnable = {
+  id: "marketOverview",
+  name: "Market Overview",
+  description: "Shows current status of major market indices",
+  type: "widget",
+  label: "Markets",
+  icon: "chart-line",
+  getWidget: async () => {
+    try {
+      // Fetch market data
+      const results = await fetchMarketData();
+
+      // Create table of market indices
+      const tableUI = new TableUIBuilder()
+        .addColumns([
+          { key: 'name', header: 'Index' },
+          { key: 'price', header: 'Price' },
+          { key: 'change', header: 'Change' },
+          { key: 'changePercent', header: '%' }
+        ])
+        .rows(results);
+
+      // Create quick lookup form
+      const formUI = new FormUIBuilder()
+        .title('Get Stock Price')
+        .addField({
+          name: 'ticker',
+          label: 'Stock Symbol',
+          type: 'string',
+          required: true,
+        })
+        .onSubmit({
+          tool: 'get-stock-price',
+          paramSchema: {
+            ticker: { type: 'string' }
+          }
+        });
+
+      // Create overview chart
+      const chartUI = new ChartUIBuilder()
+        .type('line')
+        .title('Market Trends')
+        .chartData(results)
+        .dataKeys({
+          x: 'time',
+          y: 'price'
+        });
+
+      // Compose final layout
+      const cardUI = new CardUIBuilder()
+        .addChild(formUI.build())
+        .addChild(tableUI.build())
+        .addChild(chartUI.build());
+
+      return new DainResponse({
+        text: "Market overview data loaded",
+        data: results,
+        ui: cardUI.build()
+      });
+    } catch (error) {
+      return new DainResponse({
+        text: "Failed to load market overview",
+        data: null,
+        ui: new AlertUIBuilder()
+          .variant('error')
+          .message('Unable to load market data')
+          .build()
+      });
+    }
+  }
+};
+Common Use Cases
+Pinnable widgets are ideal for:
+
+Data dashboards
+Quick search forms
+Status monitors
+Activity feeds
+User preferences
+Recent items
+Quick actions
+Analytics views
+Previous
+Map
+Next
+Using Processes
+Pinnable Widgets
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Background Process
+Using Processes
+Background Processes
+Create and manage long-running background tasks in DAIN services
+
+Overview
+Background processes enable tools to start long-running tasks that continue executing after the initial response. This is ideal for operations like data analysis, file processing, or any task that may take significant time to complete.
+
+A user can see the progress of a background process in the process viewer and in their dashboard, while continuing to interact with the assistant.
+
+Process Store Configuration
+Services using background processes must configure a process store for persistence. Two options are available:
+
+
+import { 
+  defineDAINService, 
+  RedisProcessStore 
+} from "@dainprotocol/service-sdk";
+
+// Option 1: Redis Store (recommended for production)
+const processStore = new RedisProcessStore(process.env.REDIS_URL);
+
+// Option 2: Memory Store (default, for development)
+const dainService = defineDAINService({
+  // Memory store is used if processStore is not specified
+  metadata: { /* ... */ }
+});
+
+// Using Redis Store
+const dainService = defineDAINService({
+  metadata: { /* ... */ },
+  processStore: processStore  // Redis store for persistence
+});
+Creating a Process
+Start a background process using the processes API:
+
+
+handler: async (input, agentInfo, { app }) => {
+  // Create a process with a descriptive name
+  const processId = await app.processes!.createProcess(
+    agentInfo,
+    "one-time",
+    "Data Analysis",
+    "Analyzing dataset"
+  );
+
+  // Start background work
+  (async () => {
+    try {
+      // Your long-running task
+    } catch (error) {
+      await app.processes!.failProcess(processId, error.message);
+    }
+  })();
+
+  // Return immediately with process viewer
+  return new DainResponse({
+    text: "Analysis started",
+    data: { processId },
+    ui: { type: "processViewer", props: { processId } },
+    processes: [processId]
+  });
+}
+Updating Progress
+Keep users informed about task progress:
+
+
+await app.processes!.addUpdate(processId, {
+  percentage: 20,
+  text: "Processing data..."
+});
+Adding Results
+Return UI components when the process completes:
+
+
+import { CardListUIBuilder, ImageCardUIBuilder } from "@dainprotocol/utils";
+
+// Create visualization UI
+const visualizations = results.map(result => 
+  new ImageCardUIBuilder(result.imageUrl)
+    .title("Analysis Result")
+    .description(result.description)
+    .build()
+);
+
+// Add final results
+await app.processes!.addResult(processId, {
+  text: "Analysis complete",
+  data: results,
+  ui: new CardListUIBuilder()
+    .title("Analysis Results")
+    .description("Visualizations from your analysis")
+    .addCards(visualizations)
+    .build()
+});
+Example: Phone Call Service
+Here's an example using Redis process store for a phone call service:
+
+
+import { RedisProcessStore } from "@dainprotocol/service-sdk";
+
+// Initialize Redis store
+const processStore = new RedisProcessStore(process.env.REDIS_URL);
+
+const makePhoneCallConfig: ToolConfig = {
+  id: "make-phone-call",
+  name: "Make Phone Call",
+  handler: async ({ phoneNumber, goal }, agentInfo, { app }) => {
+    // Create process
+    const processId = await app.processes!.createProcess(
+      agentInfo,
+      "one-time",
+      "Phone Call",
+      `Calling ${phoneNumber}`
+    );
+
+    // Start call in background
+    initiatePhoneCall(processId, app, phoneNumber, goal);
+
+    return new DainResponse({
+      text: "Initiating phone call",
+      data: { processId },
+      ui: { type: "processViewer", props: { processId } },
+      processes: [processId]
+    });
+  }
+};
+
+const dainService = defineDAINService({
+  metadata: { /* ... */ },
+  processStore: processStore,  // Use Redis store
+  tools: [makePhoneCallConfig]
+});
+Process States
+A background process can be in one of these states:
+
+running: Process is actively executing
+completed: Process finished successfully
+failed: Process encountered an error
+cancelled: Process was manually stopped
+Previous
+Pinnable Widgets
+Next
+Human in the Loop
+Background Processes
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Background Process
+Human In The Loop
+Human in the Loop
+Add human intervention points to your background processes
+
+Overview
+Human in the Loop allows background processes to pause and request human intervention at critical decision points. This is particularly useful for processes that require human approval, input, or decision-making during execution.
+
+A user will see a process requires action in their assistant dashboard, and can approve or deny an action, as well as provide a response to the process.
+
+Requesting Human Action
+To request human intervention:
+
+
+const stepId = await app.processes!.requestHumanAction(processId, {
+  message: "Need approval for next step",
+  ui: new CardUIBuilder()
+    .title("Action Required")
+    .content("Please approve this action")
+    .build(),
+  actions: [
+    {
+      id: "approve",
+      title: "Approve",
+      requiresResponse: false
+    },
+    {
+      id: "reject",
+      title: "Reject",
+      requiresResponse: true  // Requires explanation
+    }
+  ],
+  timeoutMs: 30 * 1000  // 30 second timeout
+});
+Waiting for Response
+After requesting action, wait for human response:
+
+
+const response = await app.processes!.waitForHumanAction(
+  processId,
+  stepId,
+  30 * 1000  // Timeout
+);
+
+// Handle response
+if (response.actionId === "approve") {
+  // Continue process
+} else if (response.actionId === "reject") {
+  // Handle rejection with response.responseText
+}
+Example: Phone Call Agent
+Here's a real example from a phone call service that uses human intervention when the AI agent needs help:
+
+
+const askForHelp = {
+  description: "Ask the person you are calling on behalf of for help",
+  parameters: z.object({
+    question: z.string().describe("The question you need help with")
+  }),
+  execute: async ({ question }) => {
+    // Log the help request
+    callSummary.steps.push({
+      speaker: "ask_for_help",
+      text: question,
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      // Request human intervention
+      const stepId = await processHandler.requestHumanAction(processId, {
+        message: question,
+        ui: new CardUIBuilder()
+          .title("Help requested")
+          .content(`I need help with: ${question}`)
+          .build(),
+        actions: [
+          {
+            id: "respond-to-help",
+            title: "Respond to question",
+            requiresResponse: true
+          },
+          {
+            id: "end-call",
+            title: "Just hang up the call",
+            requiresResponse: false
+          }
+        ],
+        timeoutMs: 30 * 1000
+      });
+
+      // Wait for response
+      const response = await processHandler.waitForHumanAction(
+        processId,
+        stepId,
+        30 * 1000
+      );
+
+      // Handle responses
+      if (response.actionId === "end-call") {
+        await hangUp("Call ended by recipient due to human request");
+        return "Call ended by recipient due to human request";
+      }
+
+      if (response.actionId === "respond-to-help") {
+        // Log human response
+        callSummary.steps.push({
+          speaker: "client",
+          text: response.responseText || "No response from client",
+          timestamp: new Date().toISOString()
+        });
+
+        return "The user has responded: " + response.responseText;
+      }
+
+    } catch (error) {
+      return "The human could not be reached. Please continue or hang up.";
+    }
+  }
+};
+Action Configuration
+When requesting human action, you can configure:
+
+
+interface HumanAction {
+  id: string;           // Unique identifier
+  title: string;        // Button text
+  requiresResponse: boolean;  // Whether text input is required
+}
+
+interface HumanActionRequest {
+  message: string;      // Main message
+  ui?: UIComponent;     // Optional UI
+  actions: HumanAction[];  // Available actions
+  timeoutMs: number;    // Timeout in milliseconds
+}
+Use Cases
+Human in the Loop is ideal for:
+
+Approval workflows
+Decision points requiring judgment
+Complex situations needing human insight
+Quality control checkpoints
+Exception handling
+Sensitive operations
+Customer service escalations
+Error Handling
+Always implement timeout handling and fallbacks:
+
+
+try {
+  const response = await app.processes!.waitForHumanAction(
+    processId,
+    stepId,
+    timeout
+  );
+  // Handle response
+} catch (error) {
+  if (error.code === 'TIMEOUT') {
+    // Handle timeout
+  }
+  // Handle other errors
+}
+Previous
+Using Processes
+Next
+OAuth Integration
+Human in the Loop
+
+
+Beachhacks LogoDAIN Logo
+Docs
+Getting Started
+Services
+Oauth
+OAuth Integration
+Add OAuth authentication to your DAIN service
+
+Overview
+DAIN services support OAuth2 authentication through a built-in OAuth system. This allows your service to authenticate users on their assistant with providers like GitHub, Google, and others.
+
+Configuration
+Configure OAuth in your service definition:
+
+
+import { defineDAINService, createOAuth2Tool } from "@dainprotocol/service-sdk";
+
+const dainService = defineDAINService({
+  metadata: { /* ... */ },
+  oauth2: {
+    baseUrl: process.env.TUNNEL_URL,
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        authorizationUrl: "https://github.com/login/oauth/authorize",
+        tokenUrl: "https://github.com/login/oauth/access_token",
+        scopes: ["user", "gist"],
+        onSuccess: async (agentId, tokens) => {
+          await tokenStore.set(agentId, tokens);
+        }
+      }
+    }
+  }
+});
+Token Storage
+Implement secure token storage:
+
+
+interface OAuth2Tokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  provider: string;
+  agentId: string;
+}
+
+// Development
+const tokenStore = new Map<string, OAuth2Tokens>();
+
+// Production
+class DatabaseTokenStore {
+  async set(agentId: string, tokens: OAuth2Tokens) {
+    await db.tokens.upsert({ agentId, ...tokens });
+  }
+  
+  async get(agentId: string): Promise<OAuth2Tokens | null> {
+    return db.tokens.findUnique({ where: { agentId } });
+  }
+}
+Authentication Methods
+Method 1: OAuth UI Builder
+Use the OAuthUIBuilder for clean authentication flows:
+
+
+import { OAuthUIBuilder } from '@dainprotocol/utils';
+
+const githubTool: ToolConfig = {
+  id: "github-tool",
+  name: "GitHub Tool",
+  description: "Interact with GitHub",
+  handler: async (inputs, agentInfo, { app }) => {
+    const tokens = await tokenStore.get(agentInfo.id);
+
+    if (!tokens) {
+      const authUrl = await app.oauth2?.generateAuthUrl(
+        "github", 
+        agentInfo.id
+      );
+      
+      return {
+        text: "GitHub authentication required",
+        data: null,
+        ui: new OAuthUIBuilder()
+          .title("GitHub Authentication")
+          .content("Please authenticate to continue")
+          .url(authUrl)
+          .provider("github")
+          .build()
+      };
+    }
+
+    // Continue with authenticated request...
+  }
+};
+Method 2: Authentication Helper
+Create a reusable authentication helper:
+
+
+import { Hono } from 'hono';
+import { AgentInfo } from '@dainprotocol/service-sdk/service';
+import { OAuthUIBuilder } from '@dainprotocol/utils';
+
+interface RequestAuthentication {
+  app: Hono;
+  agentInfo: AgentInfo;
+}
+
+export const requestAuthenticationTool = (
+  provider: string,
+  { app, agentInfo }: RequestAuthentication
+) => {
+  const authUrl = await app.oauth2?.generateAuthUrl(provider, agentInfo.id);
+  
+  return {
+    text: `Please authenticate with ${provider}`,
+    data: null,
+    ui: new OAuthUIBuilder()
+      .title(`${provider} Authentication`)
+      .content(`Authentication required`)
+      .url(authUrl)
+      .provider(provider)
+      .build()
+  };
+};
+Complete Example: GitHub Gist Service
+
+import { 
+  defineDAINService, 
+  ToolConfig,
+  createOAuth2Tool 
+} from "@dainprotocol/service-sdk";
+import { OAuthUIBuilder } from '@dainprotocol/utils';
+
+const createGistConfig: ToolConfig = {
+  id: "create-gist",
+  name: "Create GitHub Gist",
+  description: "Creates a new GitHub Gist",
+  input: z.object({
+    description: z.string(),
+    filename: z.string(),
+    content: z.string()
+  }),
+  handler: async ({ description, filename, content }, agentInfo, { app }) => {
+    const tokens = tokenStore.get(agentInfo.id);
+
+    if (!tokens) {
+      return requestAuthenticationTool("github", { app, agentInfo });
+    }
+
+    // Make authenticated request
+    const response = await fetch("https://api.github.com/gists", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        description,
+        public: true,
+        files: {
+          [filename]: { content }
+        }
+      })
+    });
+
+    const gist = await response.json();
+
+    return {
+      text: `Created Gist: ${gist.html_url}`,
+      data: { url: gist.html_url },
+      ui: new CardUIBuilder()
+        .title("Gist Created")
+        .content(`URL: ${gist.html_url}`)
+        .build()
+    };
+  }
+};
+
+const dainService = defineDAINService({
+  metadata: {
+    title: "GitHub Service",
+    description: "GitHub integration with OAuth"
+  },
+  oauth2: {
+    baseUrl: process.env.TUNNEL_URL,
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        authorizationUrl: "https://github.com/login/oauth/authorize",
+        tokenUrl: "https://github.com/login/oauth/access_token",
+        scopes: ["gist"],
+        onSuccess: async (agentId, tokens) => {
+          await tokenStore.set(agentId, tokens);
+        }
+      }
+    }
+  },
+  tools: [createOAuth2Tool("github"), createGistConfig]
+});
+Provider Setup
+Register your application in the provider's developer portal
+Configure callback URLs:
+
+https://your-base-url/oauth2/callback/{provider}
+Store credentials securely:
+
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+Important Notes
+Use environment variables for credentials
+Store tokens securely in production
+HTTPS is required for callbacks
+Default callback path is /oauth2/callback/{provider}
+Token refresh is handled automatically
+Test with tunnel URLs in development
+Previous
+Human in the Loop
+Next
+Accepting Payments
+OAuth Integration
+
+
+
