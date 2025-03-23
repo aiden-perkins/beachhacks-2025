@@ -1708,9 +1708,9 @@ const dainService = defineDAINService({
         {
         category: "Tasks",
         queries: [
-            "",
-            "",
-            "",
+            "Can you list me the repository contents of github.com/MunGell/awesome-for-beginners/tree/main",
+            "Can you create and merge a pull request from the test branch to main in github.com/MunGell/awesome-for-beginners/tree/main",
+            "Can you expand on the README.md then update its contents in the repository github.com/MunGell/awesome-for-beginners/tree/main",
         ],
         },
     ],
